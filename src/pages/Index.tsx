@@ -84,6 +84,7 @@ export default function Index() {
   const getTaskStatus = (task: Task) => {
     const ans = answers[task.id];
     if (ans === undefined) return "unanswered";
+    if (task.type === "essay") return "done";
     const isCorrect =
       task.type === "choice"
         ? (ans as number) === task.correct
@@ -122,6 +123,7 @@ export default function Index() {
 
   const isCurrentCorrect = () => {
     if (!submitted) return false;
+    if (currentTask.type === "essay") return true;
     const ans = currentTask.type === "choice" ? selectedOption : inputValue.trim();
     if (currentTask.type === "choice") return (ans as number) === currentTask.correct;
     return String(ans).trim() === String(currentTask.correct).trim();
@@ -338,6 +340,7 @@ export default function Index() {
               <div className="grid grid-cols-2 gap-2.5">
                 {part2.map((task) => {
                   const st = getTaskStatus(task);
+                  const isEssay = task.type === "essay";
                   return (
                     <button
                       key={task.id}
@@ -345,6 +348,7 @@ export default function Index() {
                       className={`relative p-4 rounded-xl border text-left transition-all duration-150 hover:scale-[1.02] active:scale-[0.97]
                         ${st === "correct" ? "bg-emerald-500/15 border-emerald-500/30" :
                           st === "wrong" ? "bg-rose-500/15 border-rose-500/30" :
+                          st === "done" ? "bg-amber-500/10 border-amber-500/20" :
                           `${bgCls} border-white/10 hover:border-white/20`}`}
                     >
                       <div className={`text-[10px] ${colorCls} opacity-70 mb-1 font-semibold uppercase tracking-wider`}>
@@ -353,10 +357,22 @@ export default function Index() {
                       <div className="text-sm text-white font-medium leading-tight">
                         {task.topic.split(" · ")[1]}
                       </div>
-                      <div className="text-xs text-white/30 mt-1">Развёрнутый ответ · {task.points} балла</div>
-                      {st !== "unanswered" && (
-                        <div className={`absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center ${st === "correct" ? "bg-emerald-500" : "bg-rose-500"}`}>
-                          <Icon name={st === "correct" ? "Check" : "X"} size={11} className="text-white" />
+                      <div className="text-xs text-white/30 mt-1">
+                        {isEssay ? `Сочинение · до ${task.points} баллов` : `Развёрнутый ответ · ${task.points} балла`}
+                      </div>
+                      {st === "done" && (
+                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                          <Icon name="PenLine" size={11} className="text-white" />
+                        </div>
+                      )}
+                      {st === "correct" && (
+                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                          <Icon name="Check" size={11} className="text-white" />
+                        </div>
+                      )}
+                      {st === "wrong" && (
+                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center">
+                          <Icon name="X" size={11} className="text-white" />
                         </div>
                       )}
                     </button>
@@ -503,7 +519,7 @@ export default function Index() {
           {/* Input */}
           {currentTask.type === "input" && (
             <div className="mb-4">
-              <div className="text-xs text-white/40 mb-2 font-medium">Введи ответ (в долях π, например: 0.5 = π/2)</div>
+              <div className="text-xs text-white/40 mb-2 font-medium">Введи ответ точно в указанном формате</div>
               <div className="flex gap-3">
                 <input
                   disabled={submitted}
@@ -513,7 +529,7 @@ export default function Index() {
                   className={`flex-1 bg-white/5 border rounded-xl px-4 py-3 text-white placeholder-white/20 text-base outline-none focus:ring-2 transition-all
                     ${submitted
                       ? isCurrentCorrect() ? "border-emerald-500/50 ring-emerald-500/20" : "border-rose-500/50 ring-rose-500/20"
-                      : `border-white/10 focus:border-${subjectConfig.id === "math" ? "violet" : subjectConfig.id === "russian" ? "emerald" : "sky"}-500/50`
+                      : "border-white/10 focus:border-white/30"
                     }`}
                 />
                 {submitted && (
@@ -530,8 +546,34 @@ export default function Index() {
             </div>
           )}
 
+          {/* Essay */}
+          {currentTask.type === "essay" && (
+            <div className="mb-4">
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-3">
+                <div className="text-xs text-amber-300 font-semibold uppercase tracking-wider mb-2">✍️ Сочинение · до {currentTask.points} баллов</div>
+                <p className="text-amber-100/80 text-xs leading-relaxed">
+                  Напишите сочинение в соответствии со структурой. Минимум — 150 слов. После написания нажмите «Отметить выполненным» и посмотрите образец ответа.
+                </p>
+              </div>
+              <textarea
+                disabled={submitted}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Введите ваше сочинение здесь..."
+                rows={10}
+                className={`w-full bg-white/5 border rounded-2xl px-4 py-3 text-white placeholder-white/20 text-sm leading-relaxed outline-none focus:ring-2 transition-all resize-none
+                  ${submitted ? "border-emerald-500/30 opacity-60" : "border-white/10 focus:border-white/30 focus:ring-white/10"}`}
+              />
+              {submitted && (
+                <div className="mt-2 text-xs text-white/40">
+                  Сочинение сохранено. Сравните с образцом ответа.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Feedback */}
-          {submitted && (
+          {submitted && currentTask.type !== "essay" && (
             <div className={`rounded-xl p-4 mb-4 animate-fade-in border ${isCurrentCorrect() ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"}`}>
               <div className="flex items-center gap-2 mb-1">
                 <span>{isCurrentCorrect() ? "✅" : "❌"}</span>
@@ -544,6 +586,20 @@ export default function Index() {
                 className="text-xs text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
               >
                 Посмотреть полное решение →
+              </button>
+            </div>
+          )}
+          {submitted && currentTask.type === "essay" && (
+            <div className="rounded-xl p-4 mb-4 animate-fade-in border bg-amber-500/10 border-amber-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span>✍️</span>
+                <span className="text-sm font-bold text-amber-300">Сочинение выполнено</span>
+              </div>
+              <button
+                onClick={() => { setSolutionTaskId(currentTaskId); setScreen("solution"); }}
+                className="text-xs text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+              >
+                Посмотреть план и образец сочинения →
               </button>
             </div>
           )}
@@ -561,10 +617,14 @@ export default function Index() {
             {!submitted ? (
               <button
                 onClick={submitAnswer}
-                disabled={currentTask.type === "choice" ? selectedOption === null : !inputValue.trim()}
+                disabled={
+                  currentTask.type === "choice" ? selectedOption === null :
+                  currentTask.type === "essay" ? !inputValue.trim() :
+                  !inputValue.trim()
+                }
                 className={`flex-1 py-3.5 ${accentBtnCls} disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition-all active:scale-[0.98]`}
               >
-                Проверить →
+                {currentTask.type === "essay" ? "✍️ Отметить выполненным" : "Проверить →"}
               </button>
             ) : (
               <button
@@ -657,12 +717,14 @@ export default function Index() {
                   className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all hover:scale-[1.01] text-left
                     ${status === "correct" ? "bg-emerald-500/10 border-emerald-500/20" :
                       status === "wrong" ? "bg-rose-500/10 border-rose-500/20" :
+                      status === "done" ? "bg-amber-500/10 border-amber-500/20" :
                       "bg-white/5 border-white/10"
                     }`}
                 >
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0
                     ${status === "correct" ? "bg-emerald-500 text-white" :
                       status === "wrong" ? "bg-rose-500 text-white" :
+                      status === "done" ? "bg-amber-500 text-white" :
                       "bg-white/10 text-white/50"}`}>
                     {task.id}
                   </div>
@@ -673,6 +735,9 @@ export default function Index() {
                         Ваш: {task.options[ans as number]}
                         {status === "wrong" && ` → верно: ${task.options[task.correct as number]}`}
                       </div>
+                    )}
+                    {status === "done" && (
+                      <div className="text-xs text-amber-400/60 mt-0.5">Сочинение написано</div>
                     )}
                   </div>
                   <div className="text-xs text-white/30 flex-shrink-0">разбор →</div>
