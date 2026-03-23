@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { MATH_TASKS, type Task } from "@/data/mathTasks";
 import { RUSSIAN_TASKS } from "@/data/russianTasks";
 import { CS_TASKS } from "@/data/csTasks";
+
+const AI_TUTOR_URL = "https://functions.poehali.dev/978d5799-e149-4996-bdcd-2097f8365f73";
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 type Subject = "math" | "russian" | "cs";
 type Screen = "subjects" | "home" | "task" | "result" | "solution";
@@ -75,6 +82,44 @@ export default function Index() {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [solutionTaskId, setSolutionTaskId] = useState<number>(1);
+
+  // AI Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: "assistant", content: "Привет! 👋 Я твой ИИ-репетитор по ЕГЭ 2026. Могу помочь разобраться с любым заданием по математике, русскому или информатике. Что непонятно?" }
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chatOpen) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, chatOpen]);
+
+  const sendChatMessage = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    setChatInput("");
+    const userMsg: ChatMessage = { role: "user", content: text };
+    const newMessages = [...chatMessages, userMsg];
+    setChatMessages(newMessages);
+    setChatLoading(true);
+    try {
+      const res = await fetch(AI_TUTOR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages.map(m => ({ role: m.role, content: m.content })) }),
+      });
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: "assistant", content: data.reply || "Извини, что-то пошло не так. Попробуй ещё раз." }]);
+    } catch {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Нет соединения с сервером. Проверь интернет и попробуй снова." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const subjectConfig = SUBJECTS.find((s) => s.id === activeSubject)!;
   const tasks = subjectConfig.tasks;
@@ -233,6 +278,95 @@ export default function Index() {
             Все задания соответствуют структуре ЕГЭ 2026
           </p>
         </div>
+
+        {/* ── AI CHAT PANEL ─────────────────────────────── */}
+        {chatOpen && (
+          <div className="fixed bottom-24 right-4 w-[340px] max-w-[calc(100vw-2rem)] bg-[#13131f] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 flex flex-col animate-fade-in z-50"
+            style={{ height: "420px" }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 flex-shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-sky-500 flex items-center justify-center text-sm">
+                🤖
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-white">ИИ-репетитор</div>
+                <div className="text-xs text-white/40">ЕГЭ 2026 · Математика, Русский, Инф.</div>
+              </div>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+              >
+                <Icon name="X" size={14} className="text-white/50" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-thin">
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm leading-relaxed
+                    ${msg.role === "user"
+                      ? "bg-violet-600 text-white rounded-br-sm"
+                      : "bg-white/8 text-white/90 rounded-bl-sm border border-white/8"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white/8 border border-white/8 px-4 py-2.5 rounded-xl rounded-bl-sm">
+                    <div className="flex gap-1 items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="flex gap-2 px-3 pb-3 pt-2 border-t border-white/8 flex-shrink-0">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendChatMessage()}
+                placeholder="Задай вопрос по заданию..."
+                disabled={chatLoading}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/25 outline-none focus:border-violet-500/50 transition-colors disabled:opacity-50"
+              />
+              <button
+                onClick={sendChatMessage}
+                disabled={!chatInput.trim() || chatLoading}
+                className="w-9 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all active:scale-95 flex-shrink-0"
+              >
+                <Icon name="Send" size={15} className="text-white" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── FLOATING BUTTON ───────────────────────────── */}
+        <button
+          onClick={() => setChatOpen(!chatOpen)}
+          className={`fixed bottom-6 right-4 w-14 h-14 rounded-2xl shadow-lg transition-all duration-300 active:scale-95 flex items-center justify-center z-50
+            ${chatOpen
+              ? "bg-white/10 border border-white/20 shadow-black/30"
+              : "bg-gradient-to-br from-violet-600 to-sky-600 shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-105"
+            }`}
+        >
+          {chatOpen
+            ? <Icon name="X" size={22} className="text-white/70" />
+            : <span className="text-2xl">🤖</span>
+          }
+          {!chatOpen && (
+            <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#0a0a14] animate-pulse" />
+          )}
+        </button>
       </div>
     );
   }
